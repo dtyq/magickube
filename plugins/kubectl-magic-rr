@@ -1,0 +1,23 @@
+#!/bin/bash
+# kubectl-magic-rr - 增强版滚动重启插件
+
+set -e
+
+if [ $# -lt 2 ]; then
+  echo "用法: kubectl magic rr NAMESPACE NAME [-t TYPE]"
+  exit 1
+fi
+
+ns="$1"
+name="$2"
+resource_type="deployment"
+shift 2
+
+while getopts ":t:" opt; do
+  case $opt in
+    t) resource_type="$OPTARG";;
+    \?) echo "无效选项: -$OPTARG" >&2; exit 1;;
+  esac
+done
+
+kubectl rollout restart "$resource_type"/"$name" -n "$ns" 

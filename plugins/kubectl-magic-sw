@@ -1,0 +1,241 @@
+#!/bin/bash
+# kubectl-magic-sw - 交互式切换 Kubernetes 上下文
+
+set -e
+
+# 获取所有上下文
+get_contexts() {
+  kubectl config get-contexts -o name
+}
+
+# 获取当前上下文
+get_current_context() {
+  kubectl config current-context
+}
+
+# 切换上下文
+switch_context() {
+  kubectl config use-context "$1"
+}
+
+# 清屏
+clear_screen() {
+  tput clear
+}
+
+# 移动光标到指定位置
+move_cursor() {
+  tput cup $1 0
+}
+
+# 保存光标位置
+save_cursor() {
+  tput sc
+}
+
+# 恢复光标位置
+restore_cursor() {
+  tput rc
+}
+
+# 隐藏光标
+hide_cursor() {
+  tput civis
+}
+
+# 显示光标
+show_cursor() {
+  tput cnorm
+}
+
+# 终止函数
+cleanup() {
+  show_cursor
+  tput sgr0  # 重置所有终端属性
+  echo ""
+  exit 0
+}
+
+# 注册终止处理
+trap cleanup EXIT INT TERM
+
+# 主函数
+main() {
+  # 获取终端大小
+  local LINES=$(tput lines)
+  local COLS=$(tput cols)
+  
+  # 获取所有上下文和当前上下文
+  local contexts=($(get_contexts))
+  local current=$(get_current_context)
+  local num_contexts=${#contexts[@]}
+  local selected=0
+  
+  # 找到当前上下文的索引
+  for i in "${!contexts[@]}"; do
+    if [[ "${contexts[$i]}" == "$current" ]]; then
+      selected=$i
+      break
+    fi
+  done
+  
+  # 隐藏光标
+  hide_cursor
+  
+  # 显示标题
+  clear_screen
+  echo "Pick the context to use:"
+  echo ""
+  
+  # 显示上下文列表
+  local start_line=3
+  local max_display=$((LINES - 7))  # 7 = 标题(2行) + 底部提示和空行(4行) + 切换成功提示(1行)
+  local scroll_offset=0
+  
+  # 如果当前上下文不在视图范围内，调整滚动偏移
+  if ((selected >= max_display)); then
+    scroll_offset=$((selected - max_display + 1))
+  fi
+  
+  # 主循环
+  while true; do
+    # 重新渲染列表
+    move_cursor $start_line
+    
+    # 跟踪实际显示的行数
+    local displayed_lines=0
+    
+    for ((i = 0; i < max_display && i + scroll_offset < num_contexts; i++)); do
+      local idx=$((i + scroll_offset))
+      local ctx="${contexts[$idx]}"
+      local prefix="  "
+      
+      # 当前选择的行显示 ">"
+      if [[ $idx -eq $selected ]]; then
+        prefix="> "
+        tput bold
+      fi
+      
+      # 当前上下文显示 [x]，其他显示 [ ]
+      if [[ "$ctx" == "$current" ]]; then
+        printf "${prefix}[x] %s\n" "$ctx"
+      else
+        printf "${prefix}[ ] %s\n" "$ctx"
+      fi
+      
+      tput sgr0  # 恢复正常显示
+      displayed_lines=$((displayed_lines + 1))
+    done
+    
+    # 清除任何残留行，确保底部提示显示在正确位置
+    move_cursor $((start_line + displayed_lines))
+    tput ed  # 清除光标位置到屏幕底部的所有内容
+    
+    # 显示底部提示
+    echo ""
+    echo "Press q to quit."
+    echo ""
+    
+    # 读取按键
+    read -s -n 1 key
+    
+    case "$key" in
+      A|k)  # 向上箭头或 k
+        if [[ $selected -gt 0 ]]; then
+          ((selected--))
+          # 如果选择移出了当前显示范围，向上滚动
+          if [[ $selected -lt $scroll_offset ]]; then
+            ((scroll_offset--))
+          fi
+        fi
+        ;;
+      B|j)  # 向下箭头或 j
+        if [[ $selected -lt $((num_contexts - 1)) ]]; then
+          ((selected++))
+          # 如果选择移出了当前显示范围，向下滚动
+          if [[ $selected -ge $((scroll_offset + max_display)) ]]; then
+            ((scroll_offset++))
+          fi
+        fi
+        ;;
+      q|Q)  # 退出
+        return 0
+        ;;
+      "")  # 回车键
+        local new_context="${contexts[$selected]}"
+        # 如果选择了与当前上下文不同的上下文，则切换
+        if [[ "$new_context" != "$current" ]]; then
+          # 切换上下文
+          switch_context "$new_context"
+          
+          # 清除列表并显示结果
+          move_cursor $start_line
+          tput ed  # 清除从光标位置到屏幕底部的所有内容
+          
+          # 重新渲染列表
+          for ((i = 0; i < max_display && i + scroll_offset < num_contexts; i++)); do
+            local idx=$((i + scroll_offset))
+            local ctx="${contexts[$idx]}"
+            local prefix="  "
+            
+            # 当前选择的行显示 ">"
+            if [[ $idx -eq $selected ]]; then
+              prefix="> "
+              tput bold
+            fi
+            
+            # 当前上下文显示 [x]，其他显示 [ ]
+            if [[ "$ctx" == "$current" ]]; then
+              printf "${prefix}[x] %s\n" "$ctx"
+            elif [[ "$ctx" == "$new_context" ]]; then
+              printf "${prefix}[x] %s\n" "$ctx"
+            else
+              printf "${prefix}[ ] %s\n" "$ctx"
+            fi
+            
+            tput sgr0  # 恢复正常显示
+          done
+          
+          # 显示结果信息（紧跟列表后）
+          echo ""
+          echo "Switched to context \"$new_context\"."
+        else
+          # 清除列表并显示结果
+          move_cursor $start_line
+          tput ed  # 清除从光标位置到屏幕底部的所有内容
+          
+          # 重新渲染列表
+          for ((i = 0; i < max_display && i + scroll_offset < num_contexts; i++)); do
+            local idx=$((i + scroll_offset))
+            local ctx="${contexts[$idx]}"
+            local prefix="  "
+            
+            # 当前选择的行显示 ">"
+            if [[ $idx -eq $selected ]]; then
+              prefix="> "
+              tput bold
+            fi
+            
+            # 当前上下文显示 [x]，其他显示 [ ]
+            if [[ "$ctx" == "$current" ]]; then
+              printf "${prefix}[x] %s\n" "$ctx"
+            else
+              printf "${prefix}[ ] %s\n" "$ctx"
+            fi
+            
+            tput sgr0  # 恢复正常显示
+          done
+          
+          # 显示结果信息（紧跟列表后）
+          echo ""
+          echo "Already using context \"$current\"."
+        fi
+        # 回车选择后退出
+        return 0
+        ;;
+    esac
+  done
+}
+
+# 执行主函数
+main 

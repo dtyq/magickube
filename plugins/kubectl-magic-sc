@@ -1,0 +1,44 @@
+#!/bin/bash
+# kubectl-magic-sc - Secret 查询和编辑插件
+
+set -e
+
+if [ $# -lt 1 ]; then
+  echo "用法: kubectl magic sc NAMESPACE [NAME] [-e]"
+  exit 1
+fi
+
+ns="$1"
+edit_mode=0
+name=""
+shift
+
+# 解析剩余参数
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -e)
+      edit_mode=1
+      shift
+      ;;
+    *)
+      if [ -z "$name" ]; then
+        name="$1"
+        shift
+      else
+        echo "错误：检测到多余参数 '$1'" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [ $edit_mode -eq 1 ]; then
+  [ -z "$name" ] && { echo "用法: kubectl magic sc NAMESPACE NAME -e"; exit 1; }
+  kubectl edit secret/"$name" -n "$ns"
+else
+  if [ -z "$name" ]; then
+    kubectl get secret -n "$ns"
+  else
+    kubectl get secret/"$name" -n "$ns" -o yaml
+  fi
+fi 

@@ -1,0 +1,219 @@
+#!/bin/bash
+# kubectl-magic-sh - 智能进入Pod容器shell插件
+
+set -e
+
+# 交互式 Pod 选择器（核心函数）
+_select_pod() {
+  local ns="$1" search_keyword="$2"
+  echo "当前命名空间: $ns"
+  [ -z "$ns" ] && { echo -n "请输入命名空间: "; read ns; }
+  
+  # 获取 Pod 列表并编号，带状态和年龄信息
+  local pod_list=$(kubectl get pods -n "$ns" --no-headers 2>&1)
+  if [[ $? -ne 0 ]]; then
+    echo "错误: 无法获取 Pod 列表: $pod_list"
+    return 1
+  fi
+  
+  if [[ -z "$pod_list" ]]; then
+    echo "命名空间 $ns 中没有找到 Pod"
+    return 1
+  fi
+  
+  # 如果提供了搜索关键字，过滤Pod列表
+  if [[ -n "$search_keyword" ]]; then
+    local filtered_list=$(echo "$pod_list" | grep -i "$search_keyword")
+    
+    # 如果过滤后没有结果，使用原始列表
+    if [[ -z "$filtered_list" ]]; then
+      echo "没有找到包含 '$search_keyword' 的Pod，显示所有Pod"
+    else
+      echo "找到包含 '$search_keyword' 的Pod"
+      pod_list="$filtered_list"
+    fi
+  fi
+  
+  # 计算 Pod 数量
+  local pod_count=$(echo "$pod_list" | wc -l | tr -d ' ')
+  
+  # 如果只有一个Pod，自动选择
+  if [[ "$pod_count" -eq 1 ]]; then
+    local selected=$(echo "$pod_list" | awk '{print $1}')
+    echo "自动选择唯一的Pod: $selected"
+    SELECTED_POD="$selected"
+    return 0
+  fi
+  
+  # 使用新的格式化方式，确保每列对齐
+  local pods=$(echo "$pod_list" | \
+    awk '{printf "\033[33m%-3s\033[0m \033[36m%-50s\033[0m %-12s %-10s\n", NR, $1, $3, $5}')
+  
+  # 合并输出Pod列表和输入提示
+  echo -e "请选择 Pod:\n$pods"
+  pod_count=$(echo "$pod_count" | tr -d ' ')  # 再次确保没有空格
+  printf "输入编号 (1-%d): " "$pod_count"
+  read num
+  
+  if [[ -z "$num" ]]; then
+    echo "未选择 Pod，退出"
+    return 1
+  fi
+  
+  # 验证输入是否为有效数字
+  if ! [[ "$num" =~ ^[0-9]+$ ]]; then
+    echo "错误: 请输入数字"
+    return 1
+  fi
+  
+  # 验证输入是否在有效范围内
+  if [[ "$num" -lt 1 || "$num" -gt "$pod_count" ]]; then
+    echo "错误: 请输入 1-$pod_count 之间的数字"
+    return 1
+  fi
+  
+  # 提取选择的 Pod 名称
+  local selected=$(echo "$pod_list" | sed -n "${num}p" | awk '{print $1}')
+  echo "选择的 Pod: $selected"
+  
+  # 定义全局变量存储选择结果
+  SELECTED_POD="$selected"
+  return 0
+}
+
+# 主函数
+main() {
+  if [ $# -lt 1 ]; then
+    echo "用法: kubectl magic sh NAMESPACE [POD_NAME_OR_KEYWORD] [-c 容器]"
+    exit 1
+  fi
+  
+  local ns="$1" pod_arg="" pod="" container_arg=""
+  shift
+
+  # 处理参数
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -c)
+        shift
+        container_arg="$1"
+        shift
+        ;;
+      *)
+        if [ -z "$pod_arg" ]; then
+          pod_arg="$1"
+          shift
+        else
+          echo "错误: 已指定Pod名称 \"$pod_arg\"，不能再指定 \"$1\""
+          exit 1
+        fi
+        ;;
+    esac
+  done
+
+  # 检查pod_arg是否为准确的Pod名称
+  if [ -n "$pod_arg" ]; then
+    if kubectl get pod "$pod_arg" -n "$ns" &>/dev/null; then
+      echo "找到Pod: $pod_arg"
+      pod="$pod_arg"
+    else
+      # 清空全局变量
+      SELECTED_POD=""
+      _select_pod "$ns" "$pod_arg"
+      if [ $? -ne 0 ] || [ -z "$SELECTED_POD" ]; then
+        echo "未能选择有效的 Pod，退出"
+        exit 1
+      fi
+      pod="$SELECTED_POD"
+    fi
+  else
+    # 没有提供Pod名称，启动交互式选择
+    SELECTED_POD=""
+    _select_pod "$ns"
+    if [ $? -ne 0 ] || [ -z "$SELECTED_POD" ]; then
+      exit 1
+    fi
+    pod="$SELECTED_POD"
+  fi
+
+  kubectl get pod "$pod" -n "$ns" &>/dev/null
+  if [ $? -ne 0 ]; then
+    echo "错误: Pod $pod 在命名空间 $ns 中不存在"
+    exit 1
+  fi
+
+  # 处理容器选择
+  local container=""
+  
+  # 如果命令行指定了容器，直接使用
+  if [ -n "$container_arg" ]; then
+    container="$container_arg"
+  else
+    # 获取容器列表
+    local container_list=$(kubectl get pod "$pod" -n "$ns" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null)
+    if [ -z "$container_list" ]; then
+      echo "错误: 无法获取容器列表或 Pod 中没有容器"
+      exit 1
+    fi
+    
+    # 将容器列表转换为数组
+    local containers=()
+    for c in $container_list; do
+      containers+=("$c")
+    done
+    
+    # 如果没有容器，尝试直接获取第一个容器
+    if [ ${#containers[@]} -eq 0 ]; then
+      container=$(kubectl get pod "$pod" -n "$ns" -o jsonpath='{.spec.containers[0].name}' 2>/dev/null)
+      if [ -z "$container" ]; then
+        echo "错误: 无法获取容器名称"
+        exit 1
+      fi
+    # 如果只有一个容器，直接使用
+    elif [ ${#containers[@]} -eq 1 ]; then
+      container="${containers[@]}"
+      echo "Pod 中只有一个容器: ${container}"
+      # 检查容器名是否为空
+      if [ -z "$container" ]; then
+        container=$(kubectl get pod "$pod" -n "$ns" -o jsonpath='{.spec.containers[0].name}' 2>/dev/null)
+        if [ -z "$container" ]; then
+          echo "错误: 无法获取容器名称"
+          exit 1
+        fi
+      fi
+    else
+      # 如果有多个容器，提示选择
+      echo -e "\033[33m请选择容器:\033[0m"
+      select c in "${containers[@]}"; do
+        if [ -n "$c" ]; then
+          container="$c"
+          break
+        fi
+      done
+      # 如果用户没有做出选择，提示重新输入
+      if [ -z "$container" ]; then
+        echo "请输入编号选择容器，然后按回车键确认。"
+        select c in "${containers[@]}"; do
+          if [ -n "$c" ]; then
+            container="$c"
+            break
+          fi
+        done
+      fi
+    fi
+  fi
+  
+  # 确保选择了容器
+  if [ -z "$container" ]; then
+    echo "未选择容器，退出"
+    exit 1
+  fi
+
+  # 执行命令
+  local cmd="kubectl exec -it -n \"$ns\" pod/\"$pod\" -c \"$container\" -- sh -c \"exec sh\""
+  echo -e "\033[32m▶ 执行命令: $cmd\033[0m"
+  eval "$cmd"
+}
+
+# 执行主函数
+main "$@" 

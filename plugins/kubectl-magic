@@ -1,0 +1,53 @@
+#!/bin/bash
+# kubectl-magic - Kubectl 魔法工具集合
+
+set -e
+
+HELP_TEXT="kubectl-magic - Kubectl 魔法工具集合
+
+用法: kubectl magic [命令] [参数]
+
+可用命令:
+  pods NAMESPACE [-w]              查看指定命名空间的Pod，支持watch模式
+  cm NAMESPACE [NAME] [-e]         查看或编辑ConfigMap
+  sc NAMESPACE [NAME] [-e]         查看或编辑Secret
+  rr NAMESPACE NAME [-t TYPE]      滚动重启资源(默认为deployment)
+  log NAMESPACE [POD_NAME] [参数]   智能查看Pod日志
+  sh NAMESPACE [POD_NAME] [-c 容器] 智能进入Pod容器shell
+  sw                               交互式切换 Kubernetes 上下文
+  help                             显示帮助信息
+"
+
+# 主函数
+main() {
+  # 如果没有参数，显示帮助信息
+  if [ $# -lt 1 ]; then
+    echo "$HELP_TEXT"
+    exit 1
+  fi
+
+  # 获取子命令和参数
+  local subcommand="$1"
+  shift
+
+  # 找到对应的子命令执行
+  case "$subcommand" in
+    pods|cm|sc|rr|log|sh|sw)
+      # 转发到对应的子命令
+      kubectl-magic-"$subcommand" "$@"
+      ;;
+    help|--help|-h)
+      echo "$HELP_TEXT"
+      ;;
+    *)
+      echo "错误: 未知命令 '$subcommand'"
+      echo "$HELP_TEXT"
+      exit 1
+      ;;
+  esac
+}
+
+# 如果直接调用脚本则运行主函数
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi 
