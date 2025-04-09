@@ -120,22 +120,140 @@ determine_install_dir() {
   INSTALL_DIR="$install_dir"
 }
 
+# 检查命令或别名是否已存在
+check_alias_exists() {
+  local alias_name="$1"
+  
+  # 检查是否为系统命令
+  if command -v "$alias_name" &> /dev/null; then
+    return 0
+  fi
+  
+  # 检查是否为已定义的别名
+  if alias "$alias_name" &> /dev/null; then
+    return 0
+  fi
+  
+  return 1
+}
+
 # 添加命令别名到 shell 配置文件
 add_aliases() {
   local shell_config_file=$(get_shell_config_file)
+  local conflict_found=0
+  local conflict_list=""
+  
+  print_info "正在检查别名冲突..."
+  
+  # 检查所有别名是否有冲突
+  local all_aliases=("kmpods" "kmcm" "kmsc" "kmrr" "kmlog" "kmsh" "kmsw")
+  for alias_name in "${all_aliases[@]}"; do
+    if check_alias_exists "$alias_name"; then
+      conflict_found=1
+      conflict_list="${conflict_list} ${alias_name}"
+      print_warning "发现冲突: '$alias_name' 已经被使用"
+    fi
+  done
+  
+  # 如果有冲突，询问用户如何处理
+  if [ $conflict_found -eq 1 ]; then
+    echo ""
+    print_warning "检测到以下别名可能与现有命令或别名冲突: $conflict_list"
+    echo ""
+    echo "您有以下选择："
+    echo "1. 继续使用这些别名 (可能覆盖现有命令)"
+    echo "2. 使用替代前缀 'k8' (如 'k8pods' 替代 'kmpods')"
+    echo "3. 使用替代前缀 'kube-' (如 'kube-pods' 替代 'kmpods')"
+    echo "4. 自定义前缀"
+    echo "5. 不添加任何别名"
+    echo ""
+    
+    read -p "请选择 [1-5]: " alias_choice
+    
+    case "$alias_choice" in
+      1)
+        print_info "将继续使用原定别名"
+        ;;
+      2)
+        print_info "将使用 'k8' 前缀"
+        all_aliases=("k8pods" "k8cm" "k8sc" "k8rr" "k8log" "k8sh" "k8sw")
+        ;;
+      3)
+        print_info "将使用 'kube-' 前缀"
+        all_aliases=("kube-pods" "kube-cm" "kube-sc" "kube-rr" "kube-log" "kube-sh" "kube-sw")
+        ;;
+      4)
+        read -p "请输入您想使用的前缀: " custom_prefix
+        if [[ -z "$custom_prefix" ]]; then
+          print_warning "前缀不能为空，将使用默认前缀 'k8'"
+          custom_prefix="k8"
+        fi
+        print_info "将使用自定义前缀 '$custom_prefix'"
+        all_aliases=("${custom_prefix}pods" "${custom_prefix}cm" "${custom_prefix}sc" "${custom_prefix}rr" "${custom_prefix}log" "${custom_prefix}sh" "${custom_prefix}sw")
+        ;;
+      5)
+        print_info "跳过添加别名"
+        return 0
+        ;;
+      *)
+        print_warning "无效选择，将使用 'k8' 前缀作为默认值"
+        all_aliases=("k8pods" "k8cm" "k8sc" "k8rr" "k8log" "k8sh" "k8sw")
+        ;;
+    esac
+  else
+    # 没有冲突，但仍询问用户是否要自定义别名
+    echo ""
+    print_info "默认将使用 'km' 前缀作为别名 (如 'kmpods')"
+    echo "您想使用默认前缀还是自定义前缀？"
+    echo "1. 使用默认前缀 'km'"
+    echo "2. 使用替代前缀 'k8'"
+    echo "3. 使用替代前缀 'kube-'"
+    echo "4. 自定义前缀"
+    echo ""
+    
+    read -p "请选择 [1-4] (默认: 1): " prefix_choice
+    
+    case "$prefix_choice" in
+      2)
+        print_info "将使用 'k8' 前缀"
+        all_aliases=("k8pods" "k8cm" "k8sc" "k8rr" "k8log" "k8sh" "k8sw")
+        ;;
+      3)
+        print_info "将使用 'kube-' 前缀"
+        all_aliases=("kube-pods" "kube-cm" "kube-sc" "kube-rr" "kube-log" "kube-sh" "kube-sw")
+        ;;
+      4)
+        read -p "请输入您想使用的前缀: " custom_prefix
+        if [[ -z "$custom_prefix" ]]; then
+          print_warning "前缀不能为空，将使用默认前缀 'km'"
+          custom_prefix="km"
+        fi
+        print_info "将使用自定义前缀 '$custom_prefix'"
+        all_aliases=("${custom_prefix}pods" "${custom_prefix}cm" "${custom_prefix}sc" "${custom_prefix}rr" "${custom_prefix}log" "${custom_prefix}sh" "${custom_prefix}sw")
+        ;;
+      1|"")
+        print_info "将使用默认前缀 'km'"
+        # 使用默认别名，无需更改
+        ;;
+      *)
+        print_warning "无效选择，将使用默认前缀 'km'"
+        # 使用默认别名，无需更改
+        ;;
+    esac
+  fi
   
   print_info "正在将别名添加到 $shell_config_file ..."
   
   # 准备别名内容
   local aliases_content="
 # kubectl-magic 插件别名 - 由安装脚本自动添加
-alias kpods='kubectl magic pods'
-alias kcm='kubectl magic cm'
-alias ksc='kubectl magic sc'
-alias krr='kubectl magic rr'
-alias klog='kubectl magic log'
-alias ksh='kubectl magic sh'
-alias ksw='kubectl magic sw'
+alias ${all_aliases[0]}='kubectl magic pods'
+alias ${all_aliases[1]}='kubectl magic cm'
+alias ${all_aliases[2]}='kubectl magic sc'
+alias ${all_aliases[3]}='kubectl magic rr'
+alias ${all_aliases[4]}='kubectl magic log'
+alias ${all_aliases[5]}='kubectl magic sh'
+alias ${all_aliases[6]}='kubectl magic sw'
 # kubectl-magic 插件别名结束
 "
   
@@ -171,6 +289,9 @@ alias ksw='kubectl magic sw'
     echo "$aliases_content" >> "$shell_config_file"
     print_success "已添加别名到 $shell_config_file"
   fi
+  
+  # 记录使用的别名类型，用于显示说明
+  ALIAS_PREFIX="${all_aliases[0]%pods}"
   
   print_info "请运行以下命令使别名立即生效："
   echo "    source $shell_config_file"
@@ -244,13 +365,13 @@ show_instructions() {
   if [[ -n "$ALIASES_ADDED" && "$ALIASES_ADDED" -eq 1 ]]; then
     echo "您现在也可以使用以下别名快速访问这些命令:"
     echo ""
-    echo "  kpods NAMESPACE [-w]              # kubectl magic pods 的别名"
-    echo "  kcm NAMESPACE [NAME] [-e]         # kubectl magic cm 的别名"
-    echo "  ksc NAMESPACE [NAME] [-e]         # kubectl magic sc 的别名"
-    echo "  krr NAMESPACE NAME [-t TYPE]      # kubectl magic rr 的别名"
-    echo "  klog NAMESPACE [POD_NAME] [参数]   # kubectl magic log 的别名"
-    echo "  ksh NAMESPACE [POD_NAME] [-c 容器] # kubectl magic sh 的别名"
-    echo "  ksw                               # kubectl magic sw 的别名"
+    echo "  ${ALIAS_PREFIX}pods NAMESPACE [-w]              # kubectl magic pods 的别名"
+    echo "  ${ALIAS_PREFIX}cm NAMESPACE [NAME] [-e]         # kubectl magic cm 的别名"
+    echo "  ${ALIAS_PREFIX}sc NAMESPACE [NAME] [-e]         # kubectl magic sc 的别名"
+    echo "  ${ALIAS_PREFIX}rr NAMESPACE NAME [-t TYPE]      # kubectl magic rr 的别名"
+    echo "  ${ALIAS_PREFIX}log NAMESPACE [POD_NAME] [参数]   # kubectl magic log 的别名"
+    echo "  ${ALIAS_PREFIX}sh NAMESPACE [POD_NAME] [-c 容器] # kubectl magic sh 的别名"
+    echo "  ${ALIAS_PREFIX}sw                               # kubectl magic sw 的别名"
     echo ""
     echo "请运行以下命令使别名立即生效："
     echo "    source $(get_shell_config_file)"
@@ -259,6 +380,9 @@ show_instructions() {
 
 # 主函数
 main() {
+  # 初始化变量
+  ALIAS_PREFIX="km"
+  
   echo "======================================================="
   echo "           kubectl-magic 插件安装                      "
   echo "======================================================="
