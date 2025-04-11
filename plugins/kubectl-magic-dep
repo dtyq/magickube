@@ -1,0 +1,88 @@
+#!/bin/bash
+# kubectl-magic-dep - Deployment 查询插件
+
+set -e
+
+if [ $# -lt 1 ]; then
+  echo "用法: kubectl magic dep NAMESPACE [NAME] [-o 输出格式]"
+  exit 1
+fi
+
+ns="$1"
+output_format="wide"
+name=""
+shift
+
+# 解析剩余参数
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o)
+      if [ $# -gt 1 ]; then
+        output_format="$2"
+        shift 2
+      else
+        echo "错误：-o 选项需要一个参数" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      if [ -z "$name" ]; then
+        name="$1"
+        shift
+      else
+        echo "错误：检测到多余参数 '$1'" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+# 验证和标准化输出格式
+case "$output_format" in
+  yaml|json|wide|name|custom-columns=*|jsonpath=*|template=*|go-template=*)
+    # 这些是有效的输出格式，保持不变
+    ;;
+  y|yml)
+    # 常见简写转换为标准格式
+    output_format="yaml"
+    ;;
+  j)
+    # 常见简写转换为标准格式
+    output_format="json"
+    ;;
+  w)
+    # 常见简写转换为标准格式
+    output_format="wide"
+    ;;
+  *)
+    echo "警告：未知输出格式 '$output_format'，将使用 'wide'" >&2
+    output_format="wide"
+    ;;
+esac
+
+# 执行对应操作
+if [ -z "$name" ]; then
+  # 如果未指定名称，列出所有 Deployment
+  kubectl get deployment -n "$ns" -o "$output_format"
+else
+  # 如果是yaml或json格式，获取完整资源描述
+  if [[ "$output_format" == "yaml" || "$output_format" == "json" ]]; then
+    kubectl get deployment/"$name" -n "$ns" -o "$output_format"
+  else
+    # 获取 Deployment 的简明信息
+    echo -e "\033[33m=== Deployment 基本信息 ===\033[0m"
+    kubectl get deployment/"$name" -n "$ns" -o "$output_format"
+    
+    # 获取 Deployment 的详细信息
+    echo -e "\n\033[33m=== Deployment 详情 ===\033[0m"
+    kubectl describe deployment/"$name" -n "$ns"
+    
+    # 获取关联的 ReplicaSet
+    echo -e "\n\033[33m=== 关联的 ReplicaSet ===\033[0m"
+    kubectl get rs -n "$ns" -l "app=$name" -o wide 2>/dev/null || echo "未找到关联的 ReplicaSet"
+    
+    # 获取关联的 Pod
+    echo -e "\n\033[33m=== 关联的 Pod ===\033[0m"
+    kubectl get pods -n "$ns" -l "app=$name" -o wide 2>/dev/null || echo "未找到关联的 Pod"
+  fi
+fi
