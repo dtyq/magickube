@@ -12,6 +12,8 @@ HELP_TEXT="kubectl-magic - Kubectl 魔法工具集合
   cm NAMESPACE [NAME] [-e]         查看或编辑ConfigMap
   sc NAMESPACE [NAME] [-e]         查看或编辑Secret
   dep NAMESPACE [NAME] [-o 输出格式] 查看Deployment详情
+  get NAMESPACE [TYPE] [NAME] [-o 输出格式] 查看资源信息（kubectl get）
+  des NAMESPACE [TYPE] [NAME]      查看资源详情（kubectl describe）
   rr NAMESPACE NAME [-t TYPE]      滚动重启资源(默认为deployment)
   log NAMESPACE [POD_NAME] [参数]   智能查看Pod日志
   sh NAMESPACE [POD_NAME] [-c 容器] 智能进入Pod容器shell
@@ -33,7 +35,7 @@ main() {
 
   # 找到对应的子命令执行
   case "$subcommand" in
-    pods|cm|sc|dep|rr|log|sh|sw)
+    pods|cm|sc|dep|get|des|rr|log|sh|sw)
       # 转发到对应的子命令
       kubectl-magic-"$subcommand" "$@"
       ;;

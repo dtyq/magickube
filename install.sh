@@ -146,7 +146,7 @@ add_aliases() {
   print_info "正在检查别名冲突..."
   
   # 检查所有别名是否有冲突
-  local all_aliases=("kmpods" "kmcm" "kmsc" "kmdep" "kmrr" "kmlog" "kmsh" "kmsw")
+  local all_aliases=("kmpods" "kmcm" "kmsc" "kmdep" "kmget" "kmdes" "kmrr" "kmlog" "kmsh" "kmsw")
   for alias_name in "${all_aliases[@]}"; do
     if check_alias_exists "$alias_name"; then
       conflict_found=1
@@ -176,11 +176,11 @@ add_aliases() {
         ;;
       2)
         print_info "将使用 'k8' 前缀"
-        all_aliases=("k8pods" "k8cm" "k8sc" "k8dep" "k8rr" "k8log" "k8sh" "k8sw")
+        all_aliases=("k8pods" "k8cm" "k8sc" "k8dep" "k8get" "k8des" "k8rr" "k8log" "k8sh" "k8sw")
         ;;
       3)
         print_info "将使用 'kube-' 前缀"
-        all_aliases=("kube-pods" "kube-cm" "kube-sc" "kube-dep" "kube-rr" "kube-log" "kube-sh" "kube-sw")
+        all_aliases=("kube-pods" "kube-cm" "kube-sc" "kube-dep" "kube-get" "kube-des" "kube-rr" "kube-log" "kube-sh" "kube-sw")
         ;;
       4)
         read -p "请输入您想使用的前缀: " custom_prefix
@@ -189,7 +189,7 @@ add_aliases() {
           custom_prefix="k8"
         fi
         print_info "将使用自定义前缀 '$custom_prefix'"
-        all_aliases=("${custom_prefix}pods" "${custom_prefix}cm" "${custom_prefix}sc" "${custom_prefix}dep" "${custom_prefix}rr" "${custom_prefix}log" "${custom_prefix}sh" "${custom_prefix}sw")
+        all_aliases=("${custom_prefix}pods" "${custom_prefix}cm" "${custom_prefix}sc" "${custom_prefix}dep" "${custom_prefix}get" "${custom_prefix}des" "${custom_prefix}rr" "${custom_prefix}log" "${custom_prefix}sh" "${custom_prefix}sw")
         ;;
       5)
         print_info "跳过添加别名"
@@ -197,7 +197,7 @@ add_aliases() {
         ;;
       *)
         print_warning "无效选择，将使用 'k8' 前缀作为默认值"
-        all_aliases=("k8pods" "k8cm" "k8sc" "k8dep" "k8rr" "k8log" "k8sh" "k8sw")
+        all_aliases=("k8pods" "k8cm" "k8sc" "k8dep" "k8get" "k8des" "k8rr" "k8log" "k8sh" "k8sw")
         ;;
     esac
   else
@@ -216,11 +216,11 @@ add_aliases() {
     case "$prefix_choice" in
       2)
         print_info "将使用 'k8' 前缀"
-        all_aliases=("k8pods" "k8cm" "k8sc" "k8dep" "k8rr" "k8log" "k8sh" "k8sw")
+        all_aliases=("k8pods" "k8cm" "k8sc" "k8dep" "k8get" "k8des" "k8rr" "k8log" "k8sh" "k8sw")
         ;;
       3)
         print_info "将使用 'kube-' 前缀"
-        all_aliases=("kube-pods" "kube-cm" "kube-sc" "kube-dep" "kube-rr" "kube-log" "kube-sh" "kube-sw")
+        all_aliases=("kube-pods" "kube-cm" "kube-sc" "kube-dep" "kube-get" "kube-des" "kube-rr" "kube-log" "kube-sh" "kube-sw")
         ;;
       4)
         read -p "请输入您想使用的前缀: " custom_prefix
@@ -229,7 +229,7 @@ add_aliases() {
           custom_prefix="km"
         fi
         print_info "将使用自定义前缀 '$custom_prefix'"
-        all_aliases=("${custom_prefix}pods" "${custom_prefix}cm" "${custom_prefix}sc" "${custom_prefix}dep" "${custom_prefix}rr" "${custom_prefix}log" "${custom_prefix}sh" "${custom_prefix}sw")
+        all_aliases=("${custom_prefix}pods" "${custom_prefix}cm" "${custom_prefix}sc" "${custom_prefix}dep" "${custom_prefix}get" "${custom_prefix}des" "${custom_prefix}rr" "${custom_prefix}log" "${custom_prefix}sh" "${custom_prefix}sw")
         ;;
       1|"")
         print_info "将使用默认前缀 'km'"
@@ -251,10 +251,12 @@ alias ${all_aliases[0]}='kubectl magic pods'
 alias ${all_aliases[1]}='kubectl magic cm'
 alias ${all_aliases[2]}='kubectl magic sc'
 alias ${all_aliases[3]}='kubectl magic dep'
-alias ${all_aliases[4]}='kubectl magic rr'
-alias ${all_aliases[5]}='kubectl magic log'
-alias ${all_aliases[6]}='kubectl magic sh'
-alias ${all_aliases[7]}='kubectl magic sw'
+alias ${all_aliases[4]}='kubectl magic get'
+alias ${all_aliases[5]}='kubectl magic des'
+alias ${all_aliases[6]}='kubectl magic rr'
+alias ${all_aliases[7]}='kubectl magic log'
+alias ${all_aliases[8]}='kubectl magic sh'
+alias ${all_aliases[9]}='kubectl magic sw'
 # kubectl-magic 插件别名结束
 "
   
@@ -357,6 +359,8 @@ show_instructions() {
   echo "  kubectl magic cm NAMESPACE [NAME] [-e]         # 查看或编辑ConfigMap"
   echo "  kubectl magic sc NAMESPACE [NAME] [-e]         # 查看或编辑Secret"
   echo "  kubectl magic dep NAMESPACE [NAME] [-o 输出格式] # 查看Deployment详情"
+  echo "  kubectl magic get NAMESPACE [TYPE] [NAME] [-o 输出格式] # 查看资源信息（kubectl get）"
+  echo "  kubectl magic des NAMESPACE [TYPE] [NAME]      # 查看资源详情（kubectl describe）"
   echo "  kubectl magic rr NAMESPACE NAME [-t TYPE]      # 滚动重启资源(默认为deployment)"
   echo "  kubectl magic log NAMESPACE [POD_NAME] [参数]   # 智能查看Pod日志"
   echo "  kubectl magic sh NAMESPACE [POD_NAME] [-c 容器] # 智能进入Pod容器shell"
@@ -371,6 +375,8 @@ show_instructions() {
     echo "  ${ALIAS_PREFIX}cm NAMESPACE [NAME] [-e]         # kubectl magic cm 的别名"
     echo "  ${ALIAS_PREFIX}sc NAMESPACE [NAME] [-e]         # kubectl magic sc 的别名"
     echo "  ${ALIAS_PREFIX}dep NAMESPACE [NAME] [-o 输出格式] # kubectl magic dep 的别名"
+    echo "  ${ALIAS_PREFIX}get NAMESPACE [TYPE] [NAME] [-o 输出格式] # kubectl magic get 的别名"
+    echo "  ${ALIAS_PREFIX}des NAMESPACE [TYPE] [NAME]      # kubectl magic des 的别名"
     echo "  ${ALIAS_PREFIX}rr NAMESPACE NAME [-t TYPE]      # kubectl magic rr 的别名"
     echo "  ${ALIAS_PREFIX}log NAMESPACE [POD_NAME] [参数]   # kubectl magic log 的别名"
     echo "  ${ALIAS_PREFIX}sh NAMESPACE [POD_NAME] [-c 容器] # kubectl magic sh 的别名"

@@ -7,6 +7,7 @@ MagicKube 是一套增强 Kubernetes 命令行体验的工具集，提供了一�
 - **交互式选择**：自动列出并选择 Pod、容器等，无需手动复制粘贴长名称
 - **智能化处理**：自动检测单容器/多容器场景，简化操作流程
 - **便捷的资源管理**：快速查看和编辑 ConfigMap、Secret 等资源
+- **通用资源操作**：支持查询、描述任意 Kubernetes 资源类型
 - **上下文切换**：直观的 Kubernetes 上下文切换界面
 - **自定义别名支持**：提供可配置的别名前缀（如 `kmpods`、`k8pods` 等），避免命令冲突
 
@@ -178,6 +179,38 @@ kmsc default my-secret
 kmsc default my-secret -e
 ```
 
+#### 通用资源查询 (get)
+
+```bash
+# 查看默认资源类型（deployment）的列表
+kmget default
+
+# 查看特定类型的资源列表
+kmget default pod
+kmget default svc
+
+# 查看特定资源（支持类型简写）
+kmget default dep my-deployment
+kmget default po my-pod-12345
+
+# 使用不同的输出格式
+kmget default svc my-service -o yaml
+kmget default ing my-ingress -o json
+```
+
+#### 资源详情查看 (des)
+
+```bash
+# 查看默认资源类型（deployment）的列表
+kmdes default
+
+# 查看特定资源的详情（支持类型简写）
+kmdes default dep my-deployment
+kmdes default pod my-pod
+kmdes default svc my-service
+kmdes default cm my-configmap
+```
+
 #### 滚动重启资源 (rr)
 
 ```bash
@@ -280,6 +313,8 @@ Press q to quit.
 | kmpods    | kubectl magic pods     | 查看 Pod 列表              |
 | kmcm      | kubectl magic cm       | 管理 ConfigMap            |
 | kmsc      | kubectl magic sc       | 管理 Secret               |
+| kmget     | kubectl magic get      | 通用资源查询（kubectl get）  |
+| kmdes     | kubectl magic des      | 查看资源详情（kubectl describe）|
 | kmrr      | kubectl magic rr       | 滚动重启资源               |
 | kmlog     | kubectl magic log      | 查看 Pod 日志              |
 | kmsh      | kubectl magic sh       | 进入 Pod 的 Shell          |
