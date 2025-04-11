@@ -1,0 +1,123 @@
+#!/bin/bash
+# kubectl-magic-des - 资源详情查看插件 (kubectl describe)
+
+set -e
+
+if [ $# -lt 1 ]; then
+  echo "用法: kubectl magic des NAMESPACE [TYPE] [NAME]"
+  echo "资源类型参数示例: pod, deployment, service, ingress, configmap, secret 等"
+  exit 1
+fi
+
+ns="$1"
+name=""
+resource_type="deployment"
+shift
+
+# 如果还有参数，判断第二个参数是否可能是资源类型
+if [ $# -gt 0 ]; then
+  # Kubernetes 常见资源类型列表
+  valid_resource_types=("dep" "deploy" "deployment" "deployments" "pod" "pods" "svc" "service" "services" 
+                        "ing" "ingress" "cm" "configmap" "configmaps" "secret" "secrets" 
+                        "ns" "namespace" "namespaces" "node" "nodes" "pv" "persistentvolume" 
+                        "pvc" "persistentvolumeclaim" "sa" "serviceaccount" "rs" "replicaset" 
+                        "sts" "statefulset" "ds" "daemonset" "job" "jobs" "cronjob" "cronjobs"
+                        "endpoints" "ep" "event" "events" "ev" "limitrange" "limits"
+                        "networkpolicy" "netpol" "pdb" "poddisruptionbudget" "quota" "resourcequota"
+                        "hpa" "horizontalpodautoscaler" "clusterrole" "clusterrolebinding"
+                        "role" "rolebinding")
+                        
+  # 检查第二个参数是否为有效的资源类型
+  is_resource_type=0
+  for valid_type in "${valid_resource_types[@]}"; do
+    if [ "$1" == "$valid_type" ]; then
+      resource_type="$1"
+      is_resource_type=1
+      shift
+      break
+    fi
+  done
+
+  # 第二个参数不是资源类型，则认为是资源名称
+  if [ $is_resource_type -eq 0 ]; then
+    name="$1"
+    shift
+  fi
+  
+  # 如果还有参数并且name为空，则该参数为name
+  if [ $# -gt 0 ] && [ -z "$name" ]; then
+    name="$1"
+    shift
+  fi
+fi
+
+# 检查多余参数
+if [ $# -gt 0 ]; then
+  echo "错误：检测到多余参数" >&2
+  exit 1
+fi
+
+# 进行常用简写到完整资源类型的转换
+case "$resource_type" in
+  dep|deploy)
+    resource_type="deployment"
+    ;;
+  svc)
+    resource_type="service"
+    ;;
+  po)
+    resource_type="pod"
+    ;;
+  ing)
+    resource_type="ingress"
+    ;;
+  cm)
+    resource_type="configmap"
+    ;;
+  ns)
+    resource_type="namespace"
+    ;;
+  netpol)
+    resource_type="networkpolicy"
+    ;;
+  pv)
+    resource_type="persistentvolume"
+    ;;
+  pvc)
+    resource_type="persistentvolumeclaim"
+    ;;
+  sa)
+    resource_type="serviceaccount"
+    ;;
+  rs)
+    resource_type="replicaset"
+    ;;
+  sts)
+    resource_type="statefulset"
+    ;;
+  ds)
+    resource_type="daemonset"
+    ;;
+  sc)
+    resource_type="storageclass"
+    ;;
+  ep)
+    resource_type="endpoints"
+    ;;
+  ev)
+    resource_type="events"
+    ;;
+esac
+
+# 执行对应操作
+if [ -z "$name" ]; then
+  # 如果未指定名称，列出所有指定类型的资源
+  echo -e "\033[33m=== $ns 命名空间下的 $resource_type 列表 ===\033[0m"
+  kubectl get "$resource_type" -n "$ns" -o wide
+  echo ""
+  echo "提示: 使用 'kubectl magic des $ns $resource_type <名称>' 查看特定资源的详情"
+else
+  # 查看指定资源的详情
+  echo -e "\033[33m=== $resource_type/$name 详情 ===\033[0m"
+  kubectl describe "$resource_type"/"$name" -n "$ns"
+fi

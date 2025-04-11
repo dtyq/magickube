@@ -1,0 +1,168 @@
+#!/bin/bash
+# kubectl-magic-get - 通用资源查询插件
+
+set -e
+
+if [ $# -lt 1 ]; then
+  echo "用法: kubectl magic get NAMESPACE [TYPE] [NAME] [-o 输出格式]"
+  echo "资源类型参数示例: pod, deployment, service, ingress, configmap, secret 等"
+  exit 1
+fi
+
+ns="$1"
+output_format="wide"
+name=""
+resource_type="deployment" # 默认资源类型
+shift
+
+# 如果还有参数，判断第二个参数是否可能是资源类型
+if [ $# -gt 0 ]; then
+  # Kubernetes 常见资源类型列表
+  valid_resource_types=("dep" "deploy" "deployment" "deployments" "pod" "pods" "svc" "service" "services" 
+                        "ing" "ingress" "cm" "configmap" "configmaps" "secret" "secrets" 
+                        "ns" "namespace" "namespaces" "node" "nodes" "pv" "persistentvolume" 
+                        "pvc" "persistentvolumeclaim" "sa" "serviceaccount" "rs" "replicaset" 
+                        "sts" "statefulset" "ds" "daemonset" "job" "jobs" "cronjob" "cronjobs"
+                        "endpoints" "ep" "event" "events" "ev" "limitrange" "limits"
+                        "networkpolicy" "netpol" "pdb" "poddisruptionbudget" "quota" "resourcequota"
+                        "hpa" "horizontalpodautoscaler" "clusterrole" "clusterrolebinding"
+                        "role" "rolebinding")
+                        
+  # 检查第二个参数是否为有效的资源类型
+  is_resource_type=0
+  for valid_type in "${valid_resource_types[@]}"; do
+    if [ "$1" == "$valid_type" ]; then
+      resource_type="$1"
+      is_resource_type=1
+      shift
+      break
+    fi
+  done
+
+  # 如果第二个参数不是资源类型，则认为是资源名称
+  if [ $is_resource_type -eq 0 ]; then
+    name="$1"
+    shift
+  fi
+fi
+
+# 解析剩余参数
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o)
+      if [ $# -gt 1 ]; then
+        output_format="$2"
+        shift 2
+      else
+        echo "错误：-o 选项需要一个参数" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      if [ -z "$name" ]; then
+        name="$1"
+        shift
+      else
+        echo "错误：检测到多余参数 '$1'" >&2
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+# 进行常用简写到完整资源类型的转换
+case "$resource_type" in
+  dep|deploy)
+    resource_type="deployment"
+    ;;
+  svc)
+    resource_type="service"
+    ;;
+  po)
+    resource_type="pod"
+    ;;
+  ing)
+    resource_type="ingress"
+    ;;
+  cm)
+    resource_type="configmap"
+    ;;
+  ns)
+    resource_type="namespace"
+    ;;
+  netpol)
+    resource_type="networkpolicy"
+    ;;
+  pv)
+    resource_type="persistentvolume"
+    ;;
+  pvc)
+    resource_type="persistentvolumeclaim"
+    ;;
+  sa)
+    resource_type="serviceaccount"
+    ;;
+  rs)
+    resource_type="replicaset"
+    ;;
+  sts)
+    resource_type="statefulset"
+    ;;
+  ds)
+    resource_type="daemonset"
+    ;;
+  sc)
+    resource_type="storageclass"
+    ;;
+  ep)
+    resource_type="endpoints"
+    ;;
+  ev)
+    resource_type="events"
+    ;;
+esac
+
+# 验证和标准化输出格式
+case "$output_format" in
+  yaml|json|wide|name|custom-columns=*|jsonpath=*|template=*|go-template=*)
+    # 这些是有效的输出格式，保持不变
+    ;;
+  y|yml)
+    # 常见简写转换为标准格式
+    output_format="yaml"
+    ;;
+  j)
+    # 常见简写转换为标准格式
+    output_format="json"
+    ;;
+  w)
+    # 常见简写转换为标准格式
+    output_format="wide"
+    ;;
+  *)
+    echo "警告：未知输出格式 '$output_format'，将使用 'wide'" >&2
+    output_format="wide"
+    ;;
+esac
+
+# 执行对应操作
+if [ -z "$name" ]; then
+  # 如果未指定名称，列出所有指定类型的资源
+  echo -e "\033[33m=== $ns 命名空间下的 $resource_type 列表 ===\033[0m"
+  kubectl get "$resource_type" -n "$ns" -o "$output_format"
+else
+  # 查看指定资源
+  echo -e "\033[33m=== $resource_type/$name 详情 (-o $output_format) ===\033[0m"
+  kubectl get "$resource_type"/"$name" -n "$ns" -o "$output_format"
+  
+  # 仅对特定资源类型且非yaml/json格式时显示关联资源
+  if [[ "$resource_type" == "deployment" && "$output_format" != "yaml" && "$output_format" != "json" ]]; then
+    # 获取关联的 ReplicaSet
+    echo -e "\n\033[33m=== 关联的 ReplicaSet ===\033[0m"
+    kubectl get rs -n "$ns" -l "app=$name" -o wide 2>/dev/null || echo "未找到关联的 ReplicaSet"
+    
+    # 获取关联的 Pod
+    echo -e "\n\033[33m=== 关联的 Pod ===\033[0m"
+    kubectl get pods -n "$ns" -l "app=$name" -o wide 2>/dev/null || echo "未找到关联的 Pod"
+  fi
+fi
