@@ -84,11 +84,11 @@ _select_pod() {
 # 主函数
 main() {
   if [ $# -lt 1 ]; then
-    echo "用法: kubectl magic sh NAMESPACE [POD_NAME_OR_KEYWORD] [-c 容器]"
+    echo "用法: kubectl magic sh NAMESPACE [POD_NAME_OR_KEYWORD] [-c 容器] [命令]"
     exit 1
   fi
   
-  local ns="$1" pod_arg="" pod="" container_arg=""
+  local ns="$1" pod_arg="" pod="" container_arg="" command_arg=""
   shift
 
   # 处理参数
@@ -103,8 +103,11 @@ main() {
         if [ -z "$pod_arg" ]; then
           pod_arg="$1"
           shift
+        elif [ -z "$command_arg" ]; then
+          command_arg="$1"
+          shift
         else
-          echo "错误: 已指定Pod名称 \"$pod_arg\"，不能再指定 \"$1\""
+          echo "错误: 参数过多，不能再指定 \"$1\""
           exit 1
         fi
         ;;
@@ -210,7 +213,12 @@ main() {
   fi
 
   # 执行命令
-  local cmd="kubectl exec -it -n \"$ns\" pod/\"$pod\" -c \"$container\" -- sh -c \"exec sh\""
+  local cmd
+  if [ -n "$command_arg" ]; then
+    cmd="kubectl exec -it -n \"$ns\" pod/\"$pod\" -c \"$container\" -- sh -c \"$command_arg\""
+  else
+    cmd="kubectl exec -it -n \"$ns\" pod/\"$pod\" -c \"$container\" -- sh -c \"exec sh\""
+  fi
   echo -e "\033[32m▶ 执行命令: $cmd\033[0m"
   eval "$cmd"
 }
