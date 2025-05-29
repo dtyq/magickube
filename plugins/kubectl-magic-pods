@@ -4,19 +4,12 @@
 set -e
 
 if [ $# -lt 1 ]; then
-  echo "用法: kubectl magic pods NAMESPACE [-w]"
+  echo "用法: kubectl magic pods NAMESPACE [-选项]"
   exit 1
 fi
 
 ns="$1"
 shift
-watch_flag=""
 
-while getopts ":w" opt; do
-  case $opt in
-    w) watch_flag="-w";;
-    \?) echo "无效选项: -$OPTARG" >&2; exit 1;;
-  esac
-done
-
-kubectl get pods -n "$ns" $watch_flag 
+# 将剩余的所有参数传递给 kubectl get pods 命令
+kubectl get pods -n "$ns" "$@"
