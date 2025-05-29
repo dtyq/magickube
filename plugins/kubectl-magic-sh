@@ -1,5 +1,5 @@
 #!/bin/bash
-# kubectl-magic-sh - 智能进入Pod容器shell插件
+# kubectl-magic-sh - 智能进入 Pod 容器 shell 插件
 
 set -e
 
@@ -21,15 +21,14 @@ _select_pod() {
     return 1
   fi
   
-  # 如果提供了搜索关键字，过滤Pod列表
+  # 如果提供了搜索关键字，过滤 Pod 列表
   if [[ -n "$search_keyword" ]]; then
     local filtered_list=$(echo "$pod_list" | grep -i "$search_keyword")
     
     # 如果过滤后没有结果，使用原始列表
     if [[ -z "$filtered_list" ]]; then
-      echo "没有找到包含 '$search_keyword' 的Pod，显示所有Pod"
+      echo "没有找到包含 '$search_keyword' 的 Pod，显示所有 Pod"
     else
-      echo "找到包含 '$search_keyword' 的Pod"
       pod_list="$filtered_list"
     fi
   fi
@@ -37,10 +36,9 @@ _select_pod() {
   # 计算 Pod 数量
   local pod_count=$(echo "$pod_list" | wc -l | tr -d ' ')
   
-  # 如果只有一个Pod，自动选择
+  # 如果只有一个 Pod，自动选择
   if [[ "$pod_count" -eq 1 ]]; then
     local selected=$(echo "$pod_list" | awk '{print $1}')
-    echo "自动选择唯一的Pod: $selected"
     SELECTED_POD="$selected"
     return 0
   fi
@@ -49,7 +47,7 @@ _select_pod() {
   local pods=$(echo "$pod_list" | \
     awk '{printf "\033[33m%-3s\033[0m \033[36m%-50s\033[0m %-12s %-10s\n", NR, $1, $3, $5}')
   
-  # 合并输出Pod列表和输入提示
+  # 合并输出 Pod 列表和输入提示
   echo -e "请选择 Pod:\n$pods"
   pod_count=$(echo "$pod_count" | tr -d ' ')  # 再次确保没有空格
   printf "输入编号 (1-%d): " "$pod_count"
@@ -74,7 +72,6 @@ _select_pod() {
   
   # 提取选择的 Pod 名称
   local selected=$(echo "$pod_list" | sed -n "${num}p" | awk '{print $1}')
-  echo "选择的 Pod: $selected"
   
   # 定义全局变量存储选择结果
   SELECTED_POD="$selected"
@@ -84,11 +81,11 @@ _select_pod() {
 # 主函数
 main() {
   if [ $# -lt 1 ]; then
-    echo "用法: kubectl magic sh NAMESPACE [POD_NAME_OR_KEYWORD] [-c 容器]"
+    echo "用法: kubectl magic sh NAMESPACE [POD_NAME_OR_KEYWORD] [-c 容器] [命令]"
     exit 1
   fi
   
-  local ns="$1" pod_arg="" pod="" container_arg=""
+  local ns="$1" pod_arg="" pod="" container_arg="" command_arg=""
   shift
 
   # 处理参数
@@ -103,18 +100,21 @@ main() {
         if [ -z "$pod_arg" ]; then
           pod_arg="$1"
           shift
+        elif [ -z "$command_arg" ]; then
+          command_arg="$1"
+          shift
         else
-          echo "错误: 已指定Pod名称 \"$pod_arg\"，不能再指定 \"$1\""
+          echo "错误: 参数过多，不能再指定 \"$1\""
           exit 1
         fi
         ;;
     esac
   done
 
-  # 检查pod_arg是否为准确的Pod名称
+  # 检查 pod_arg 是否为准确的 Pod 名称
   if [ -n "$pod_arg" ]; then
     if kubectl get pod "$pod_arg" -n "$ns" &>/dev/null; then
-      echo "找到Pod: $pod_arg"
+      echo "找到 Pod: $pod_arg"
       pod="$pod_arg"
     else
       # 清空全局变量
@@ -127,7 +127,7 @@ main() {
       pod="$SELECTED_POD"
     fi
   else
-    # 没有提供Pod名称，启动交互式选择
+    # 没有提供 Pod 名称，启动交互式选择
     SELECTED_POD=""
     _select_pod "$ns"
     if [ $? -ne 0 ] || [ -z "$SELECTED_POD" ]; then
@@ -172,7 +172,6 @@ main() {
     # 如果只有一个容器，直接使用
     elif [ ${#containers[@]} -eq 1 ]; then
       container="${containers[@]}"
-      echo "Pod 中只有一个容器: ${container}"
       # 检查容器名是否为空
       if [ -z "$container" ]; then
         container=$(kubectl get pod "$pod" -n "$ns" -o jsonpath='{.spec.containers[0].name}' 2>/dev/null)
@@ -210,7 +209,12 @@ main() {
   fi
 
   # 执行命令
-  local cmd="kubectl exec -it -n \"$ns\" pod/\"$pod\" -c \"$container\" -- sh -c \"exec sh\""
+  local cmd
+  if [ -n "$command_arg" ]; then
+    cmd="kubectl exec -it -n \"$ns\" pod/\"$pod\" -c \"$container\" -- sh -c \"$command_arg\""
+  else
+    cmd="kubectl exec -it -n \"$ns\" pod/\"$pod\" -c \"$container\" -- sh -c \"exec sh\""
+  fi
   echo -e "\033[32m▶ 执行命令: $cmd\033[0m"
   eval "$cmd"
 }

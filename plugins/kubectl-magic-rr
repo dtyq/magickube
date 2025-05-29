@@ -16,7 +16,7 @@ shift 2
 while getopts ":t:" opt; do
   case $opt in
     t) resource_type="$OPTARG";;
-    \?) echo "无效选项: -$OPTARG" >&2; exit 1;;
+    \?) echo "错误: 无效选项 -$OPTARG" >&2; exit 1;;
   esac
 done
 

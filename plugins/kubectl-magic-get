@@ -54,7 +54,7 @@ while [ $# -gt 0 ]; do
         output_format="$2"
         shift 2
       else
-        echo "错误：-o 选项需要一个参数" >&2
+        echo "错误: -o 选项需要一个参数" >&2
         exit 1
       fi
       ;;
@@ -63,7 +63,7 @@ while [ $# -gt 0 ]; do
         name="$1"
         shift
       else
-        echo "错误：检测到多余参数 '$1'" >&2
+        echo "错误: 检测到多余参数 '$1'" >&2
         exit 1
       fi
       ;;
@@ -140,7 +140,7 @@ case "$output_format" in
     output_format="wide"
     ;;
   *)
-    echo "警告：未知输出格式 '$output_format'，将使用 'wide'" >&2
+    echo "警告: 未知输出格式 '$output_format'，将使用 'wide'" >&2
     output_format="wide"
     ;;
 esac
@@ -155,7 +155,7 @@ else
   echo -e "\033[33m=== $resource_type/$name 详情 (-o $output_format) ===\033[0m"
   kubectl get "$resource_type"/"$name" -n "$ns" -o "$output_format"
   
-  # 仅对特定资源类型且非yaml/json格式时显示关联资源
+  # 仅对特定资源类型且非 yaml/json 格式时显示关联资源
   if [[ "$resource_type" == "deployment" && "$output_format" != "yaml" && "$output_format" != "json" ]]; then
     # 获取关联的 ReplicaSet
     echo -e "\n\033[33m=== 关联的 ReplicaSet ===\033[0m"

@@ -25,7 +25,7 @@ while [ $# -gt 0 ]; do
         name="$1"
         shift
       else
-        echo "错误：检测到多余参数 '$1'" >&2
+        echo "错误: 检测到多余参数 '$1'" >&2
         exit 1
       fi
       ;;

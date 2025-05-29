@@ -1,5 +1,5 @@
 #!/bin/bash
-# kubectl-magic-des - 资源详情查看插件 (kubectl describe)
+# kubectl-magic-des - 资源详情查看插件（kubectl describe）
 
 set -e
 
@@ -44,7 +44,7 @@ if [ $# -gt 0 ]; then
     shift
   fi
   
-  # 如果还有参数并且name为空，则该参数为name
+  # 如果还有参数并且 name 为空，则该参数为 name
   if [ $# -gt 0 ] && [ -z "$name" ]; then
     name="$1"
     shift
@@ -53,7 +53,7 @@ fi
 
 # 检查多余参数
 if [ $# -gt 0 ]; then
-  echo "错误：检测到多余参数" >&2
+  echo "错误: 检测到多余参数" >&2
   exit 1
 fi
 
