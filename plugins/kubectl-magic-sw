@@ -20,38 +20,62 @@ switch_context() {
 
 # 清屏
 clear_screen() {
-  tput clear
+  tput clear 2>/dev/null || true
 }
 
 # 移动光标到指定位置
 move_cursor() {
-  tput cup $1 0
+  tput cup $1 0 2>/dev/null || true
 }
 
 # 保存光标位置
 save_cursor() {
-  tput sc
+  tput sc 2>/dev/null || true
 }
 
 # 恢复光标位置
 restore_cursor() {
-  tput rc
+  tput rc 2>/dev/null || true
 }
 
 # 隐藏光标
 hide_cursor() {
-  tput civis
+  tput civis 2>/dev/null || true
 }
 
 # 显示光标
 show_cursor() {
-  tput cnorm
+  tput cnorm 2>/dev/null || true
+}
+
+# 读取按键（正确处理转义序列）
+read_key() {
+  local key
+  # 读取第一个字符
+  IFS= read -rsn1 key 2>/dev/null || true
+  
+  # 如果是 ESC 序列的开始
+  if [[ $key == $'\x1b' ]]; then
+    # 读取下一个字符
+    IFS= read -rsn1 -t 0.001 key2 2>/dev/null || true
+    
+    # 如果是 '[' 则继续读取（标准箭头键序列）
+    if [[ $key2 == '[' ]]; then
+      IFS= read -rsn1 -t 0.001 key3 2>/dev/null || true
+      echo "$key3"
+    else
+      # 单独的 ESC 键
+      echo "ESC"
+    fi
+  else
+    echo "$key"
+  fi
 }
 
 # 终止函数
 cleanup() {
   show_cursor
-  tput sgr0  # 重置所有终端属性
+  tput sgr0 2>/dev/null || true  # 重置所有终端属性
   echo ""
   exit 0
 }
@@ -61,9 +85,12 @@ trap cleanup EXIT INT TERM
 
 # 主函数
 main() {
-  # 获取终端大小
-  local LINES=$(tput lines)
-  local COLS=$(tput cols)
+  # 临时禁用 set -e，避免交互式操作中的命令返回非零状态导致脚本退出
+  set +e
+  
+  # 获取终端大小（提供默认值以防 tput 失败）
+  local LINES=$(tput lines 2>/dev/null || echo 24)
+  local COLS=$(tput cols 2>/dev/null || echo 80)
   
   # 获取所有上下文和当前上下文
   local contexts=($(get_contexts))
@@ -113,7 +140,7 @@ main() {
       # 当前选择的行显示 ">"
       if [[ $idx -eq $selected ]]; then
         prefix="> "
-        tput bold
+        tput bold 2>/dev/null || true
       fi
       
       # 当前上下文显示 [x]，其他显示 [ ]
@@ -123,21 +150,21 @@ main() {
         printf "${prefix}[ ] %s\n" "$ctx"
       fi
       
-      tput sgr0  # 恢复正常显示
+      tput sgr0 2>/dev/null || true  # 恢复正常显示
       displayed_lines=$((displayed_lines + 1))
     done
     
     # 清除任何残留行，确保底部提示显示在正确位置
     move_cursor $((start_line + displayed_lines))
-    tput ed  # 清除光标位置到屏幕底部的所有内容
+    tput ed 2>/dev/null || true  # 清除光标位置到屏幕底部的所有内容
     
     # 显示底部提示
     echo ""
-    echo "Press q to quit."
+    echo "Press SPACE/ENTER to select, q to quit."
     echo ""
     
     # 读取按键
-    read -s -n 1 key
+    key=$(read_key)
     
     case "$key" in
       A|k)  # 向上箭头或 k
@@ -161,7 +188,7 @@ main() {
       q|Q)  # 退出
         return 0
         ;;
-      "")  # 回车键
+      ""|" ")  # 回车键或空格键
         local new_context="${contexts[$selected]}"
         # 如果选择了与当前上下文不同的上下文，则切换
         if [[ "$new_context" != "$current" ]]; then
@@ -170,7 +197,7 @@ main() {
           
           # 清除列表并显示结果
           move_cursor $start_line
-          tput ed  # 清除从光标位置到屏幕底部的所有内容
+          tput ed 2>/dev/null || true  # 清除从光标位置到屏幕底部的所有内容
           
           # 重新渲染列表
           for ((i = 0; i < max_display && i + scroll_offset < num_contexts; i++)); do
@@ -181,7 +208,7 @@ main() {
             # 当前选择的行显示 ">"
             if [[ $idx -eq $selected ]]; then
               prefix="> "
-              tput bold
+              tput bold 2>/dev/null || true
             fi
             
             # 当前上下文显示 [x]，其他显示 [ ]
@@ -193,7 +220,7 @@ main() {
               printf "${prefix}[ ] %s\n" "$ctx"
             fi
             
-            tput sgr0  # 恢复正常显示
+            tput sgr0 2>/dev/null || true  # 恢复正常显示
           done
           
           # 显示结果信息（紧跟列表后）
@@ -202,7 +229,7 @@ main() {
         else
           # 清除列表并显示结果
           move_cursor $start_line
-          tput ed  # 清除从光标位置到屏幕底部的所有内容
+          tput ed 2>/dev/null || true  # 清除从光标位置到屏幕底部的所有内容
           
           # 重新渲染列表
           for ((i = 0; i < max_display && i + scroll_offset < num_contexts; i++)); do
@@ -213,7 +240,7 @@ main() {
             # 当前选择的行显示 ">"
             if [[ $idx -eq $selected ]]; then
               prefix="> "
-              tput bold
+              tput bold 2>/dev/null || true
             fi
             
             # 当前上下文显示 [x]，其他显示 [ ]
@@ -223,7 +250,7 @@ main() {
               printf "${prefix}[ ] %s\n" "$ctx"
             fi
             
-            tput sgr0  # 恢复正常显示
+            tput sgr0 2>/dev/null || true  # 恢复正常显示
           done
           
           # 显示结果信息（紧跟列表后）
